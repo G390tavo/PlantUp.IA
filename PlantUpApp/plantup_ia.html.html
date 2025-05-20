@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>PlantUp IA - Identificación de Plantas</title>
+  <style>
+    /* Colores: blanco, verde lima (#AFFF00), verde oscuro (#006400) */
+    :root {
+      --white-color: #FFFFFF;
+      --lime-green: #AFFF00;
+      --dark-green: #006400;
+      --background: var(--white-color);
+      --text-color: var(--dark-green);
+      --accent-color: var(--lime-green);
+    }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+        Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+      background-color: var(--background);
+      color: var(--text-color);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      padding: 1rem;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    header {
+      text-align: center;
+      padding-bottom: 1rem;
+      border-bottom: 3px solid var(--dark-green);
+      user-select:none;
+    }
+    header h1 {
+      margin: 0;
+      font-weight: 900;
+      letter-spacing: 2px;
+      color: var(--dark-green);
+      font-size: 1.9rem;
+    }
+    header p {
+      margin: 0.25rem 0 0 0;
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--lime-green);
+      user-select:none;
+    }
+    #camera-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 1.2rem;
+    }
+    video {
+      width: 100%;
+      max-width: 420px;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 4px solid var(--lime-green);
+      box-shadow: 0 0 15px var(--lime-green);
+      user-select:none;
+    }
+    button {
+      background-color: var(--lime-green);
+      border: none;
+      border-radius: 10px;
+      padding: 1rem 1.8rem;
+      margin-top: 1.25rem;
+      font-weight: 700;
+      color: var(--dark-green);
+      cursor: pointer;
+      font-size: 1.1rem;
+      box-shadow: 0 5px 0 var(--dark-green);
+      transition: background-color 0.3s ease, box-shadow 0.3s ease;
+      user-select:none;
+    }
+    button:disabled {
+      background-color: #d6f199;
+      cursor: not-allowed;
+      box-shadow: none;
+      color: #4a6e21;
+    }
+    button:hover:not(:disabled) {
+      background-color: #ccff33;
+      box-shadow: 0 7px 0 #004d00;
+    }
+    #output {
+      margin-top: 2.2rem;
+      padding: 1.2rem 1.5rem;
+      border-radius: 14px;
+      background-color: #f8ffea;
+      box-shadow: 0 0 20px var(--dark-green);
+      max-width: 420px;
+      width: 100%;
+      color: var(--dark-green);
+      user-select:text;
+    }
+    #output h2 {
+      margin-top: 0;
+      margin-bottom: 0.8rem;
+      font-weight: 900;
+      font-size: 1.5rem;
+      text-align: center;
+    }
+    #output p {
+      margin: 0.4rem 0;
+      line-height: 1.4;
+      font-size: 1rem;
+    }
+    #output h3 {
+      margin-bottom: 0.25rem;
+      font-weight: 800;
+      font-size: 1.1rem;
+      border-bottom: 2px solid var(--lime-green);
+      padding-bottom: 3px;
+      margin-top: 1rem;
+    }
+    footer {
+      margin-top: auto;
+      padding-top: 2rem;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #444;
+      user-select:none;
+    }
+    @media (max-width: 480px) {
+      button {
+        width: 100%;
+        font-size: 1.2rem;
+        padding: 1.2rem;
+      }
+      #output {
+        font-size: 0.95rem;
+      }
+    }
+  </style>
+
+  <!-- Aquí agregamos el manifest y meta para tema -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#006400" />
+
+  <!-- Registro del Service Worker, dentro del head -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker
+          .register("service-worker.js")
+          .then((reg) => console.log("Service Worker registrado:", reg))
+          .catch((err) => console.warn("Error registrando SW:", err));
+      });
+    }
+  </script>
+</head>
+<body>
+  <header>
+    <h1>PlantUp IA</h1>
+    <p>Identificación de Plantas con IA Gemini</p>
+  </header>
+
+  <section id="camera-section">
+    <video id="video" autoplay playsinline muted></video>
+    <button id="capture-btn" aria-label="Tomar foto e identificar planta">Tomar Foto e Identificar</button>
+  </section>
+
+  <section id="output" hidden aria-live="polite">
+    <h2 id="plant-name">Nombre de la planta</h2>
+    <p id="plant-info">Descripción de la planta.</p>
+    <h3>Cómo cuidarla:</h3>
+    <p id="plant-care">Consejos para el cuidado.</p>
+    <h3>Dato Curioso:</h3>
+    <p id="plant-funfact">Dato interesante sobre la planta.</p>
+  </section>
+
+  <footer>
+    <p>PlantUp IA &copy; 2024. Compatible con la mayoría de teléfonos modernos.</p>
+  </footer>
+
+  <script>
+    const video = document.getElementById("video");
+    const captureBtn = document.getElementById("capture-btn");
+    const outputSection = document.getElementById("output");
+    const plantNameEl = document.getElementById("plant-name");
+    const plantInfoEl = document.getElementById("plant-info");
+    const plantCareEl = document.getElementById("plant-care");
+    const plantFunFactEl = document.getElementById("plant-funfact");
+
+    // Inicializar cámara trasera
+    async function setupCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+          audio: false,
+        });
+        video.srcObject = stream;
+        await video.play();
+      } catch (err) {
+        alert("No se pudo acceder a la cámara. Por favor revisa los permisos.");
+        console.error(err);
+      }
+    }
+    setupCamera();
+
+    captureBtn.addEventListener("click", async () => {
+      captureBtn.disabled = true;
+      captureBtn.textContent = "Identificando...";
+
+      // Crear canvas para capturar imagen del video
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 480;
+      canvas.height = video.videoHeight || 360;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convertir canvas a Blob de imagen JPEG
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          alert("Error capturando la imagen.");
+          resetButton();
+          return;
+        }
+
+        try {
+          // URL del endpoint Gemini API - REEMPLAZA con tu endpoint correcto
+          const geminiEndpoint = "https://aiplatform.googleapis.com/v1/projects/TU_PROJECT_ID/locations/global/publishers/google/models/gemini-2.0-flash:generateContent";
+          // Tu API Key
+          const apiKey = "AIzaSyAju9sc_vfVAdVdRqVmKqPBfMEz8yOq0BI";
+          
+          // Construir payload para Gemini, debe ser adaptado a la documentación oficial
+          // Este ejemplo es ilustrativo, ajusta "contents" y "fileData" según la documentación real
+          const reader = new FileReader();
+          reader.readAsDataURL(blob);
+          reader.onloadend = async () => {
+            const base64data = reader.result.split(',')[1]; // Obtener solo la parte base64
+
+            const payload = {
+              contents: {
+                role: "user",
+                parts: [
+                  { text: "Identifica esta planta y dame información y cuidados breves." },
+                  {
+                    fileData: {
+                      mimeType: "image/jpeg",
+                      // Según doc puede ir fileBytes o fileUri
+                      // Aquí enviamos base64 en propiedad fileBytes (ajusta si usa otro campo)
+                      fileBytes: base64data
+                    }
+                  }
+                ]
+              }
+            };
+
+            // Realizar la llamada POST a la API Gemini
+            const response = await fetch(geminiEndpoint + "?key=" + apiKey, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              throw new Error("Respuesta no OK de Gemini: " + response.status);
+            }
+            const data = await response.json();
+
+            // EXTRAER la información útil de data
+            // Como no tenemos formato exacto, usamos mock en caso de no aplicar
+            // Ajusta esta parte según tu respuesta real del API
+
+            // Ejemplo ficticio para mostrar; reemplazar este bloque:
+            const plantInfo = {
+              name: data.name || "Nombre no disponible",
+              description:
+                data.description || "Descripción corta no disponible",
+              care:
+                data.care || "Instrucciones de cuidado no disponibles",
+              funFact:
+                data.funFact ||
+                "Dato curioso no disponible"
+            };
+
+            // Mostrar info en UI
+            plantNameEl.textContent = plantInfo.name;
+            plantInfoEl.textContent = plantInfo.description;
+            plantCareEl.textContent = plantInfo.care;
+            plantFunFactEl.textContent = plantInfo.funFact;
+            outputSection.hidden = false;
+            resetButton();
+          };
+        } catch (error) {
+          alert("Error al identificar planta: " + error.message);
+          console.error(error);
+          outputSection.hidden = true;
+          resetButton();
+        }
+      }, "image/jpeg", 0.95);
+    });
+
+    function resetButton() {
+      captureBtn.disabled = false;
+      captureBtn.textContent = "Tomar Foto e Identificar";
+    }
+  </script>
+</body>
+</html>
+
